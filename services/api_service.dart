@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -49,49 +49,7 @@ class ApiService {
     return [];
   }
 
-  Future<bool> createTimelineEvent(Map<String, dynamic> data) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/timeline/'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(data),
-      );
-      return response.statusCode == 201;
-    } catch (e) {
-      print('Error creating timeline event: $e');
-      return false;
-    }
-  }
-
   // --- USER PROFILE INFORMATION ---
-  Future<List<dynamic>> fetchProfiles() async {
-    try {
-      final response = await http.get(Uri.parse('$baseUrl/profile/'));
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-    } catch (e) {
-      print('Error fetching profiles: $e');
-    }
-    return [];
-  }
-
-  Future<bool> createProfile(Map<String, dynamic> data) async {
-    try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/profile/'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(data),
-      );
-      if (response.statusCode != 201) {
-        print('Error creating profile (Status ${response.statusCode}): ${response.body}');
-      }
-      return response.statusCode == 201;
-    } catch (e) {
-      print('Error creating profile: $e');
-      return false;
-    }
-  }
   Future<Map<String, dynamic>?> fetchUserProfile(int profileId) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/profile/$profileId/'));
@@ -111,9 +69,6 @@ class ApiService {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(data),
       );
-      if (response.statusCode != 200) {
-        print('Error updating profile (Status ${response.statusCode}): ${response.body}');
-      }
       return response.statusCode == 200;
     } catch (e) {
       print('Error updating profile: $e');
