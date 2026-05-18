@@ -54,6 +54,17 @@ class TaskItem {
     required this.progress,
     required this.status,
   });
+
+  // Factory to parse live Django REST task records cleanly
+  factory TaskItem.fromJson(Map<String, dynamic> json) {
+    return TaskItem(
+      name: json['title'] ?? '',
+      startDate: json['start_date'] ?? 'Sept 2025',
+      finishDate: json['finish_date'],
+      progress: json['status'] == 'completed' ? 100.0 : 40.0,
+      status: json['status'] ?? 'todo',
+    );
+  }
 }
 
 class MilestoneItem {
@@ -68,6 +79,16 @@ class MilestoneItem {
     required this.description,
     required this.isCompleted,
   });
+
+  // Factory to parse live Django REST timeline records cleanly
+  factory MilestoneItem.fromJson(Map<String, dynamic> json) {
+    return MilestoneItem(
+      title: json['title'] ?? '',
+      date: json['date_range'] ?? '',
+      description: json['achievement_details'] ?? '',
+      isCompleted: json['progress_percentage'] == 100,
+    );
+  }
 }
 
 class ArchitectureStep {
@@ -116,9 +137,21 @@ class BibliographyEntry {
     this.url,
     required this.type,
   });
+
+  // Factory to parse live Django REST bibliography records cleanly
+  factory BibliographyEntry.fromJson(Map<String, dynamic> json) {
+    return BibliographyEntry(
+      title: json['title'] ?? '',
+      authors: json['authors'] ?? '',
+      year: json['year'] ?? '2026',
+      source: json['source_info'] ?? '',
+      url: json['url'],
+      type: json['ref_type'] ?? 'article',
+    );
+  }
 }
 
-// ==================== DATA INSTANCES ====================
+// ==================== STATIC DATA INSTANCES ====================
 
 final projectInfo = const ProjectInfo(
   title: 'CartoVec',
@@ -170,7 +203,7 @@ final tasksList = [
   const TaskItem(
     name: 'Analyse des besoins & cadrage',
     startDate: 'Sept 2025',
-    finishDate: 'Say 2025',
+    finishDate: 'Sept 2025',
     progress: 100.0,
     status: 'completed',
   ),
@@ -197,7 +230,7 @@ final tasksList = [
   ),
   const TaskItem(
     name: 'Agent IA & Active Learning',
-    startDate: 'Jan 202',
+    startDate: 'Jan 2026', // Fixed typo here!
     finishDate: 'Jan 2026',
     progress: 100.0,
     status: 'completed',
@@ -277,7 +310,7 @@ final milestonesList = [
 ];
 
 final architectureSteps = [
-  ArchitectureStep(
+  const ArchitectureStep(
     title: 'Prétraitement',
     description: "Chargement et préparation de l'image raster",
     icon: '📥',
@@ -375,7 +408,7 @@ final timelineEvents = [
     isCompleted: true,
     progress: 1.0,
   ),
-  TimelineEvent(
+  const TimelineEvent(
     date: 'Janvier 2026',
     title: 'Agent IA & Active Learning',
     description: "Développement de l'agent LangGraph avec boucle Perceive→Plan→Execute→QA. Mise en place de l'Active Learning adaptatif HSV.",
