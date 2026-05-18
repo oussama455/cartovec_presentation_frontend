@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/project_data.dart';
 import '../services/api_service.dart';
 
@@ -12,10 +13,11 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final ApiService _apiService = ApiService();
-  
+
   // Futures for async backend calls
   late Future<List<dynamic>> _tasksFuture;
   late Future<List<dynamic>> _timelineFuture;
+  late Future<List<dynamic>> _bibliographyFuture;
   late Future<List<dynamic>> _profilesFuture;
 
   @override
@@ -28,8 +30,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _tasksFuture = _apiService.fetchTasks();
       _timelineFuture = _apiService.fetchTimeline();
+      _bibliographyFuture = _apiService.fetchBibliography();
       _profilesFuture = _apiService.fetchProfiles();
     });
+  }
+
+  Future<void> _launchURL(String urlString) async {
+    if (urlString.isEmpty) return;
+    final Uri url = Uri.parse(urlString);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible d\'ouvrir le lien : $urlString')),
+      );
+    }
+  }
+
+  Color _getRefTypeColor(String? type) {
+    switch (type) {
+      case 'dataset':
+        return Colors.blue;
+      case 'article':
+        return Colors.purple;
+      case 'framework':
+        return Colors.teal;
+      default:
+        return Colors.grey;
+    }
   }
 
   void _showAddDialog() {
@@ -68,6 +94,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _showAddTimelineDialog();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.menu_book),
+              title: const Text("Ajouter une référence"),
+              onTap: () {
+                Navigator.pop(context);
+                _showAddBibliographyDialog();
+              },
+            ),
           ],
         ),
       ),
@@ -85,14 +119,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(labelText: "Titre"),
-            ),
-            TextField(
-              controller: descController,
-              decoration: const InputDecoration(labelText: "Description"),
-            ),
+            TextField(controller: titleController, decoration: const InputDecoration(labelText: "Titre")),
+            TextField(controller: descController, decoration: const InputDecoration(labelText: "Description")),
           ],
         ),
         actions: [
@@ -133,7 +161,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 TextField(controller: dateRangeController, decoration: const InputDecoration(labelText: "Période (ex: Oct 2025)")),
                 TextField(controller: detailsController, decoration: const InputDecoration(labelText: "Détails")),
                 const SizedBox(height: 16),
-                Text("Progression: ${progress.toInt()}%"),
+                Text("Progression: \${progress.toInt()}%"),
                 Slider(
                   value: progress,
                   min: 0,
@@ -169,12 +197,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _showAddBibliographyDialog() {
+    final titleController = TextEditingController();
+    final authorsController = TextEditingController();
+    final sourceController = TextEditingController();
+    final urlController = TextEditingController();
+    String refType = 'article';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text("Nouvelle Référence"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: refType,
+                  items: ['article', 'dataset', 'framework'].map((type) => DropdownMenuItem(value: type, child: Text(type.toUpperCase()))).toList(),
+                  onChanged: (val) => setDialogState(() => refType = val!),
+                  decoration: const InputDecoration(labelText: "Type"),
+                ),
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: "Titre")),
+                TextField(controller: authorsController, decoration: const InputDecoration(labelText: "Auteurs")),
+                TextField(controller: sourceController, decoration: const InputDecoration(labelText: "Source")),
+                TextField(controller: urlController, decoration: const InputDecoration(labelText: "URL")),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+            ElevatedButton(
+              onPressed: () async {
+                if (titleController.text.isNotEmpty) {
+                  final success = await _apiService.createBibliographyEntry({
+                    "title": titleController.text,
+                    "authors": authorsController.text,
+                    "source_info": sourceController.text,
+                    "url": urlController.text,
+                    "ref_type": refType,
+                  });
+                  if (success) {
+                    _refreshAllData();
+                    Navigator.pop(context);
+                  }
+                }
+              },
+              child: const Text("Ajouter"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showCreateProfileDialog() {
     final nameController = TextEditingController(text: userCardInfo.name);
-    final roleController = TextEditingController(text: userCardInfo.role);
     final emailController = TextEditingController(text: projectInfo.email);
     final supervisorController = TextEditingController(text: projectInfo.supervisor);
     final descriptionController = TextEditingController(text: projectInfo.description);
+    final roleController = TextEditingController(text: userCardInfo.role);
 
     showDialog(
       context: context,
@@ -188,7 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               TextField(controller: emailController, decoration: const InputDecoration(labelText: "Email")),
               TextField(controller: supervisorController, decoration: const InputDecoration(labelText: "Encadrant")),
               TextField(controller: descriptionController, decoration: const InputDecoration(labelText: "Description du projet"), maxLines: 3),
-              TextField(controller: roleController, decoration: const InputDecoration(labelText: "Rôle (Étudiant, etc.)")),
+              TextField(controller: roleController, decoration: const InputDecoration(labelText: "Rôle")),
             ],
           ),
         ),
@@ -202,7 +285,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 "supervisor": supervisorController.text,
                 "project_description": descriptionController.text,
                 "role": roleController.text,
-                "bio": roleController.text, // Assuming Bio maps to something
               });
               if (success) {
                 _refreshAllData();
@@ -267,7 +349,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFf8fafc),
       body: RefreshIndicator(
-        onRefresh: () async => _refreshAllData(),
+        onRefresh: () async {
+          _refreshAllData();
+        },
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
@@ -276,10 +360,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               pinned: true,
               backgroundColor: const Color(0xFFf39c12),
               actions: [
-                IconButton(icon: const Icon(Icons.refresh, color: Colors.white), onPressed: _refreshAllData),
+                IconButton(
+                  icon: const Icon(Icons.refresh, color: Colors.white),
+                  onPressed: _refreshAllData,
+                ),
               ],
               flexibleSpace: FlexibleSpaceBar(
-                title: Text('Dashboard', style: GoogleFonts.inter(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                title: Text(
+                  'Dashboard',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 background: Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
@@ -295,15 +389,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.all(20),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  // User / Project Card info
                   _buildDynamicUserCard(),
                   const SizedBox(height: 24),
+
+                  // Dynamic Timeline Section
                   _buildSectionTitle('Chronologie du Projet'),
                   const SizedBox(height: 16),
                   _buildDynamicTimelineBlock(),
                   const SizedBox(height: 24),
+
+                  // Dynamic Task Management Section
                   _buildSectionTitle('Gestion des Tâches'),
                   const SizedBox(height: 16),
                   _buildDynamicTasksTable(),
+                  const SizedBox(height: 24),
+
+                  // Integrated Dynamic Bibliography Section
+                  _buildSectionTitle('Bibliographie & Références'),
+                  const SizedBox(height: 16),
+                  _buildDynamicBibliographyBlock(),
                   const SizedBox(height: 40),
                 ]),
               ),
@@ -312,7 +417,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF0D6B78),
+        backgroundColor: const Color(0xFF0D6B78), // Brand brand color
         onPressed: _showAddDialog,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -324,10 +429,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       future: _profilesFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
         }
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return _buildStaticUserCard(); // Fallback
+          return _buildUserCard(); // Fallback to static if none in API
         }
 
         final profile = snapshot.data!.first;
@@ -343,7 +448,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
-                BoxShadow(color: const Color(0xFF0d6b78).withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 8)),
+                BoxShadow(
+                  color: const Color(0xFF0d6b78).withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
               ],
             ),
             child: Row(
@@ -356,20 +465,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
                   ),
-                  child: Center(child: Text(profile['avatar'] ?? "👤", style: const TextStyle(fontSize: 32))),
+                  child: const Center(
+                    child: Text("👤", style: TextStyle(fontSize: 32)),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(profile['full_name'] ?? 'Utilisateur', style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        profile['full_name'] ?? 'Utilisateur',
+                        style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 4),
-                      Text(profile['role'] ?? 'Étudiant en Géomatique', style: GoogleFonts.inter(color: Colors.white.withOpacity(0.85), fontSize: 13)),
+                      Text(
+                        profile['role'] ?? 'Étudiant en Géomatique',
+                        style: GoogleFonts.inter(color: Colors.white.withOpacity(0.85), fontSize: 13),
+                      ),
                       const SizedBox(height: 4),
-                      Text(profile['email'] ?? '', style: GoogleFonts.inter(color: Colors.white.withOpacity(0.85), fontSize: 12)),
+                      Text(
+                        profile['email'] ?? '',
+                        style: GoogleFonts.inter(color: Colors.white.withOpacity(0.85), fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
-                      Text('Encadrant: ${profile['supervisor'] ?? ''}', style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontSize: 11)),
+                      Text(
+                        'Encadrant: \${profile[\'supervisor\'] ?? \'\'}',
+                        style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontSize: 11),
+                      ),
                     ],
                   ),
                 ),
@@ -382,7 +505,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStaticUserCard() {
+  Widget _buildUserCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -392,8 +515,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
           colors: [Color(0xFF0d6b78), Color(0xFF084c57)],
         ),
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0d6b78).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Text("Connectez-vous à l'API pour voir le profil", style: const TextStyle(color: Colors.white)),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+            ),
+            child: Center(
+              child: Text(userCardInfo.avatar, style: const TextStyle(fontSize: 32)),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userCardInfo.name,
+                  style: GoogleFonts.inter(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  userCardInfo.role,
+                  style: GoogleFonts.inter(color: Colors.white.withOpacity(0.85), fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                ...userCardInfo.metadata.map((meta) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      meta,
+                      style: GoogleFonts.inter(color: Colors.white.withOpacity(0.7), fontSize: 11),
+                    ),
+                  );
+                }).toList(),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -404,7 +576,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- PARSE LIVE CHRONOLOGY DATA FROM DJANGO ---
+  // --- TIMELINE BLOCK ---
   Widget _buildDynamicTimelineBlock() {
     return FutureBuilder<List<dynamic>>(
       future: _timelineFuture,
@@ -415,7 +587,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-            child: const Center(child: Text("Aucun jalon d'historique disponible sur l'API.")),
+            child: const Center(child: Text("Aucun jalon d'historique disponible.")),
           );
         }
 
@@ -503,7 +675,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- PARSE LIVE TASKS DATA FROM DJANGO ---
+  // --- TASKS MANAGEMENT TABLE ---
   Widget _buildDynamicTasksTable() {
     return FutureBuilder<List<dynamic>>(
       future: _tasksFuture,
@@ -514,7 +686,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-            child: const Center(child: Text("Aucune tâche disponible sur l'API.")),
+            child: const Center(child: Text("Aucune tâche disponible.")),
           );
         }
 
@@ -527,7 +699,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           child: Column(
             children: [
-              // Table Header Structure
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: const BoxDecoration(
@@ -542,7 +713,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-              // Table Rows rendering database fields dynamically
               ...tasksData.map((task) {
                 final isLast = task == tasksData.last;
                 final bool isCompleted = task['status'] == 'completed';
@@ -567,7 +737,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ClipRRect(
                               borderRadius: BorderRadius.circular(2),
                               child: LinearProgressIndicator(
-                                value: isCompleted ? 1.0 : 0.4, // Set full fill or mid progress depending on step lifecycle status
+                                value: isCompleted ? 1.0 : 0.4,
                                 minHeight: 4,
                                 backgroundColor: const Color(0xFFe2e8f0),
                                 valueColor: AlwaysStoppedAnimation<Color>(isCompleted ? const Color(0xFF27ae60) : const Color(0xFFf39c12)),
@@ -613,6 +783,90 @@ class _DashboardScreenState extends State<DashboardScreen> {
               }).toList(),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  // --- BIBLIOGRAPHY BLOCK ---
+  Widget _buildDynamicBibliographyBlock() {
+    return FutureBuilder<List<dynamic>>(
+      future: _bibliographyFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
+        } else if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+            child: const Center(child: Text("Aucune référence bibliographique disponible.")),
+          );
+        }
+
+        final references = snapshot.data!;
+        return Column(
+          children: references.map((ref) {
+            final typeColor = _getRefTypeColor(ref['ref_type']);
+
+            return Card(
+              color: Colors.white,
+              elevation: 1,
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        ref['ref_type'].toString().toUpperCase(),
+                        style: TextStyle(color: typeColor, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        ref['source_info'] ?? '',
+                        style: GoogleFonts.inter(color: Colors.grey, fontSize: 11),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 6.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ref['title'] ?? '',
+                        style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold, color: const Color(0xFF1e293b)),
+                      ),
+                      if (ref['authors'] != null && ref['authors'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          ref['authors'],
+                          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                trailing: (ref['url'] != null && ref['url'].toString().isNotEmpty)
+                    ? IconButton(
+                  icon: const Icon(Icons.open_in_new, color: Color(0xFF0D6B78), size: 20),
+                  onPressed: () => _launchURL(ref['url']),
+                )
+                    : null,
+              ),
+            );
+          }).toList(),
         );
       },
     );

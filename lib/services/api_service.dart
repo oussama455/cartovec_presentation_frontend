@@ -63,7 +63,7 @@ class ApiService {
     }
   }
 
-  // --- USER PROFILE INFORMATION ---
+// --- USER PROFILE INFORMATION ---
   Future<List<dynamic>> fetchProfiles() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/profile/'));
@@ -92,6 +92,7 @@ class ApiService {
       return false;
     }
   }
+
   Future<Map<String, dynamic>?> fetchUserProfile(int profileId) async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/profile/$profileId/'));
@@ -117,6 +118,33 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       print('Error updating profile: $e');
+      return false;
+    }
+  }
+
+  // --- BIBLIOGRAPHY ENDPOINTS ---
+  Future<List<dynamic>> fetchBibliography() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/bibliography/'));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (e) {
+      print('Error fetching bibliography references: \$e');
+    }
+    return [];
+  }
+
+  Future<bool> createBibliographyEntry(Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/bibliography/'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(data),
+      );
+      return response.statusCode == 201;
+    } catch (e) {
+      print('Error creating bibliography entry: \$e');
       return false;
     }
   }
